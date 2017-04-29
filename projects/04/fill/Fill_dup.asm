@@ -14,71 +14,24 @@
 // Put your code here.
 
 (LOOP)
-@SCREEN
-D=A
-@addr
-M=D
-
-@SCREEN
-D=A
-@i
-M=D
-
-@KBD
-D=A-1
-@n
-M=D
-
 @KBD
 D=M
-
+@n
+M=D-1    //saving last position of screen
+@SCREEN
+D=A     
+@addr
+M=D
 @BLACK
 D;JNE
 @WHITE
 D;JEQ
 
 (BLACK)
-@i
-D=M
-@n
-D=D-M
-@LOOP
-D;JGT
 
-@addr
-A=M
-M=-1
-
-@i
-M=M+1
-@1
-D=A
-@addr
-M=D+M
-
-@BLACK
-0;JMP
 
 (WHITE)
-@i
-D=M
-@n
-D=D-M
-@LOOP
-D;JGT
 
-@addr
-A=M
-M=0
-
-@i
-M=M+1
-@1
-D=A
-@addr
-M=D+M
-@WHITE
-0;JMP
 
 @LOOP
 0;JMP
