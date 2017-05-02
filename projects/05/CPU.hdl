@@ -6,23 +6,23 @@
 /**
  * The Hack CPU (Central Processing unit), consisting of an ALU,
  * two registers named A and D, and a program counter named PC.
- * The CPU is designed to fetch and execute instructions written in 
+ * The CPU is designed to fetch and execute instructions written in
  * the Hack machine language. In particular, functions as follows:
- * Executes the inputted instruction according to the Hack machine 
+ * Executes the inputted instruction according to the Hack machine
  * language specification. The D and A in the language specification
  * refer to CPU-resident registers, while M refers to the external
- * memory location addressed by A, i.e. to Memory[A]. The inM input 
- * holds the value of this location. If the current instruction needs 
- * to write a value to M, the value is placed in outM, the address 
- * of the target location is placed in the addressM output, and the 
- * writeM control bit is asserted. (When writeM==0, any value may 
- * appear in outM). The outM and writeM outputs are combinational: 
- * they are affected instantaneously by the execution of the current 
- * instruction. The addressM and pc outputs are clocked: although they 
- * are affected by the execution of the current instruction, they commit 
- * to their new values only in the next time step. If reset==1 then the 
- * CPU jumps to address 0 (i.e. pc is set to 0 in next time step) rather 
- * than to the address resulting from executing the current instruction. 
+ * memory location addressed by A, i.e. to Memory[A]. The inM input
+ * holds the value of this location. If the current instruction needs
+ * to write a value to M, the value is placed in outM, the address
+ * of the target location is placed in the addressM output, and the
+ * writeM control bit is asserted. (When writeM==0, any value may
+ * appear in outM). The outM and writeM outputs are combinational:
+ * they are affected instantaneously by the execution of the current
+ * instruction. The addressM and pc outputs are clocked: although they
+ * are affected by the execution of the current instruction, they commit
+ * to their new values only in the next time step. If reset==1 then the
+ * CPU jumps to address 0 (i.e. pc is set to 0 in next time step) rather
+ * than to the address resulting from executing the current instruction.
  */
 
 CHIP CPU {
@@ -34,10 +34,41 @@ CHIP CPU {
                          // the current program (reset==0).
 
     OUT outM[16],        // M value output
-        writeM,          // Write to M? 
+        writeM,          // Write to M?
         addressM[15],    // Address in data memory (of M)
         pc[15];          // address of next instruction
 
     PARTS:
     // Put your code here:
+    Or(a=instruction[0], b=instruction[1], out=j1Orj2);
+    Or(a=instruction[2], b=j1Orj2, out=j1Orj2Orj3);
+    Or(a=j1Orj2Orj3, b=instruction[5], out=j1Orj2Orj3Ord1);
+    And(a=instruction[15], b=j1Orj2Orj3Ord1, out=c1);
+    Mux16(a=instruction, b=aluOut1, sel=c1, out=op1);
+    And(a=instruction[15], b=instruction[5], out=instr15Andd1);
+    Not(in=instruction[15], out=notInstruction15);
+    Or(a=notInstruction15, b=instr15Andd1, out=loadARegister);
+    ARegister(in=op1, load=loadARegister, out=op2, out[0..14]=addressM, out=PCInput);
+    Mux16(a=op2, b=inM, sel=instruction[12], out=op3);
+    And(a=instruction[4], b=instruction[15], out=loadDregister);
+    DRegister(in=aluOut2, load=loadDregister, out=op4);
+    ALU(x=op4, y=op3, zx=instruction[11], nx=instruction[10], zy=instruction[9],
+        ny=instruction[8], f=instruction[7], no=instruction[6], out=aluOut1, out=aluOut2, out=outM, zr=zr, ng=ng);
+    Or(a=instruction[5], b=instruction[4], out=d1Ord2);
+    And(a=instruction[15], b=instruction[3], out=writeM);
+    Not(in=j1Orj2Orj3, out=notj1Orj2Orj3);
+    //And(a=instruction[15], b=notj1Orj2Orj3, out=incOp1);
+    And(a=instruction[2], b=ng, out=j1Andng);
+    And(a=instruction[1], b=zr, out=j2Andzr);
+    Not(in=ng, out=notng);
+    Not(in=zr, out=notzr);
+    And(a=notng, b=notzr, out=notngAndnotzr);
+    And(a=instruction[0], b=notngAndnotzr, out=pcLoadOp1);
+    Or(a=j1Andng, b=j2Andzr, out=pcLoadOp2);
+    Or(a=pcLoadOp1, b=pcLoadOp2, out=pcLoadOp3);
+    And(a=instruction[15], b=pcLoadOp3, out=pcLoad);
+
+    //Or(a=notInstruction15, b=incOp1, out=pcInc);
+    Not(in=pcLoad, out=pcInc);
+    PC(in=PCInput, reset=reset, inc=pcInc, load=pcLoad, out[0..14]=pc);
 }

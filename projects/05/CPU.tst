@@ -44,13 +44,13 @@ set instruction %B0000000000001110, // @14
 tick, output, tock, output;
 
 set instruction %B1110001100000100, // D;jlt
-tick, output, tock, output;
+tick, output; tock, output;
 
 set instruction %B0000001111100111, // @999
 tick, output, tock, output;
 
 set instruction %B1110110111100000, // A=A+1
-tick, output, tock, output;
+tick, output; tock, output;
 
 set instruction %B1110001100001000, // M=D
 tick, output, tock, output;
