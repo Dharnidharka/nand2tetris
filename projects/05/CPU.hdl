@@ -67,8 +67,6 @@ CHIP CPU {
     Or(a=j1Andng, b=j2Andzr, out=pcLoadOp2);
     Or(a=pcLoadOp1, b=pcLoadOp2, out=pcLoadOp3);
     And(a=instruction[15], b=pcLoadOp3, out=pcLoad);
-
-    //Or(a=notInstruction15, b=incOp1, out=pcInc);
     Not(in=pcLoad, out=pcInc);
     PC(in=PCInput, reset=reset, inc=pcInc, load=pcLoad, out[0..14]=pc);
 }
