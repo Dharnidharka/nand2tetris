@@ -1,5 +1,6 @@
 from sys import argv
 from random import randint
+import os
 from os.path import basename
 
 class Parser(object):
@@ -30,9 +31,8 @@ class Parser(object):
         self.nextLine = self.tempLine
 
     def commandType(self):
-        if any(x in self.nextLine for x in ('add', 'sub', 'neg', 'eq', 'gt', 'lt', 'and', 'or', 'not')):
-            return 'C_ARITHMETIC'
-        elif 'push' in self.nextLine:
+
+        if 'push' in self.nextLine:
             return 'C_PUSH'
         elif 'pop' in self.nextLine:
             return 'C_POP'
@@ -48,6 +48,8 @@ class Parser(object):
             return 'C_CALL'
         elif 'goto' in self.nextLine:
             return 'C_GOTO'
+        elif any(x in self.nextLine for x in ('add', 'sub', 'neg', 'eq', 'gt', 'lt', 'and', 'or', 'not')):
+            return 'C_ARITHMETIC'
         else:
             return
 
@@ -65,6 +67,7 @@ class CodeWriter(object):
 
     f = ''
     filename = ''
+    counter = 0
     def __init__(self, filename):
         self.f = open(filename, "w")
 
@@ -181,25 +184,56 @@ class CodeWriter(object):
     def writeGoto(self, label):
         self.f.writelines(['@', label, '\n', '0;JMP', '\n'])
 
+    def writeCall(self, functionName, numArgs):
+        self.f.writelines(['@', functionName, '$ret.', str(self.counter), '\n', 'D=A', '\n'])
+        self.incrementSP()
+        self.f.writelines(['@LCL', '\n', 'D=M', '\n'])
+        self.incrementSP()
+        self.f.writelines(['@ARG', '\n', 'D=M', '\n'])
+        self.incrementSP()
+        self.f.writelines(['@THIS', '\n', 'D=M', '\n'])
+        self.incrementSP()
+        self.f.writelines(['@THAT', '\n', 'D=M', '\n'])
+        self.incrementSP()
+        self.f.writelines(['@SP', '\n', 'D=M', '\n', '@', str(numArgs), '\n', 'D=D-A', '\n', '@5', '\n', 'D=D-A', '\n', '@ARG', '\n', 'M=D', '\n'])
+        self.f.writelines(['@SP', '\n', 'D=M', '\n', '@LCL', '\n', 'M=D', '\n'])
+        self.f.writelines(['@', functionName, '\n', '0;JMP', '\n'])
+        self.f.writelines(['(', functionName, '$ret.', str(self.counter), ')', '\n'])
+
+    def writeReturn(self):
+        self.f.writelines(['@LCL', '\n', 'D=M', '\n', '@FRAME', '\n', 'M=D', '\n'])
+        self.f.writelines(['@5', '\n', 'D=D-A', '\n', 'A=D', '\n', 'D=M', '\n', '@RET', '\n', 'M=D', '\n'])
+        self.f.writelines(['@SP', '\n', 'AM=M-1', '\n', 'D=M', '\n', '@ARG', '\n', 'A=M', '\n', 'M=D', '\n'])
+        self.f.writelines(['@ARG', '\n', 'D=M+1', '\n', '@SP', '\n', 'M=D', '\n'])
+        self.f.writelines(['@FRAME', '\n', 'D=M', '\n', '@1', '\n', 'D=D-A', '\n', 'A=D', '\n', 'D=M', '\n', '@THAT', '\n', 'M=D', '\n'])
+        self.f.writelines(['@FRAME', '\n', 'D=M', '\n', '@2', '\n', 'D=D-A', '\n', 'A=D', '\n', 'D=M', '\n', '@THIS', '\n', 'M=D', '\n'])
+        self.f.writelines(['@FRAME', '\n', 'D=M', '\n', '@3', '\n', 'D=D-A', '\n', 'A=D', '\n', 'D=M', '\n', '@ARG', '\n', 'M=D', '\n'])
+        self.f.writelines(['@FRAME', '\n', 'D=M', '\n', '@4', '\n', 'D=D-A', '\n', 'A=D', '\n', 'D=M', '\n', '@LCL', '\n', 'M=D', '\n'])
+        self.f.writelines(['@RET', '\n', 'A=M', '\n', '0;JMP', '\n'])
+
+
+    def writeFunction(self, functionName, numLocals):
+        self.f.writelines(['(', functionName , ')', '\n'])
+        self.f.writelines(['@', numLocals, '\n', 'D=A', '\n'])
+        self.f.writelines(['(', functionName, '.localInit )', '\n'])
+        self.f.writelines(['@', functionName, '.localEnd', '\n', 'D;JEQ', '\n'])
+        self.f.writelines(['@SP', '\n', 'A=M', '\n', 'M=0', '\n', '@SP', '\n', 'M=M+1', '\n', 'D=D-1', '\n'])
+        self.f.writelines(['@', functionName, '.localInit', '\n', '0;JMP', '\n'])
+        self.f.writelines(['(', functionName, '.localEnd )', '\n'])
+
     def close(self):
         self.f.close()
 
-def main():
-    readFile = argv[1]
-    writeFile = argv[2]
-    parser = Parser(readFile)
-    writer = CodeWriter(writeFile)
-    writer.setFileName(writeFile)
+def writeToFile(parser, writer):
     while parser.hasMoreCommands():
         parser.advance()
         writer.f.writelines(['\n', '//',parser.nextLine])
+        if('//' in parser.nextLine):
+            parser.nextLine = parser.nextLine.split('//')[0]
+
         ctype = parser.commandType()
 
-        if(ctype == 'C_ARITHMETIC'):
-            command = parser.arg1().strip()
-            writer.writeArithmetic(command)
-
-        elif(ctype == 'C_PUSH' or ctype == 'C_POP'):
+        if(ctype == 'C_PUSH' or ctype == 'C_POP'):
             segment = parser.arg1().strip()
             index = parser.arg2().strip()
             writer.writePushPop(ctype, segment, index)
@@ -216,8 +250,52 @@ def main():
             label = parser.arg1().strip()
             writer.writeIf(label)
 
+        elif(ctype == 'C_FUNCTION'):
+            label = parser.arg1().strip()
+            numLocals = parser.arg2().strip()
+            writer.writeFunction(label, numLocals)
 
-    writer.writeEnd()
-    writer.close()
+        elif(ctype == 'C_RETURN'):
+            writer.writeReturn()
+
+        elif(ctype == 'C_CALL'):
+            print "counter ", writer.counter
+            writer.counter=writer.counter+1
+            functionName = parser.arg1().strip()
+            numArgs = parser.arg2().strip()
+            writer.writeCall(functionName, numArgs)
+
+        elif(ctype == 'C_ARITHMETIC'):
+            command = parser.arg1().strip()
+            writer.writeArithmetic(command)
+
+def main():
+    readFile = argv[1]
+    writeFile = argv[2]
+
+    if('.vm' in readFile):
+        parser = Parser(readFile)
+        writer = CodeWriter(writeFile)
+        writer.setFileName(writeFile)
+        writeToFile(parser, writer)
+        writer.writeEnd()
+        writer.close()
+
+    else:
+        writer = CodeWriter(writeFile)
+        writer.setFileName(writeFile)
+        writer.f.writelines(['@256', '\n', 'D=A', '\n', '@SP', '\n', 'M=D', '\n'])
+        writer.writeCall('Sys.init', 0)
+        writer.counter = writer.counter + 1
+
+        for file in os.listdir(readFile):
+            if file.endswith(".vm"):
+                filename = os.path.join(readFile, file)
+                writer.setFileName(file)
+                parser = Parser(filename)
+                writeToFile(parser, writer)
+
+        writer.writeEnd()
+        writer.close()
 
 main()
